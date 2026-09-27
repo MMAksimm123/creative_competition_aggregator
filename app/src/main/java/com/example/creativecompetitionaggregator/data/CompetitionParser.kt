@@ -37,6 +37,8 @@ class CompetitionParser {
 
             val headers = document.select("h2")
 
+            var orderIndex = 0
+
             for (header in headers) {
                 val linkElement = header.select("a") ?: continue
                 val title = linkElement.text().trim()
@@ -45,11 +47,14 @@ class CompetitionParser {
                 if (title.isBlank() || href.isBlank()) continue
 
                 val titleAndDesc = title + " " + header.nextElementSibling()?.text().orEmpty()
-                if (!creativeKeywords.any { keywords ->
-                    titleAndDesc.lowercase().contains(keywords)
+                if (!creativeKeywords.any {
+                    titleAndDesc.lowercase().contains(it)
                     }) continue
 
                 val location = determineLocation(titleAndDesc)
+
+                val contextText = header.parent()?.text().orEmpty()
+                val publishedAt = parseDate(contextText)
 
                 val fulUrl = if (href.startsWith("http")) href
                     else "https://vsekonkursy.ru/$href"
@@ -60,7 +65,9 @@ class CompetitionParser {
                         title = title,
                         location = location,
                         organizer = extractOrganizer(titleAndDesc),
-                        sourceUrl = fulUrl
+                        sourceUrl = fulUrl,
+                        publishedAt = publishedAt,
+                        siteOrder = orderIndex++
                     )
                 )
             }
@@ -89,12 +96,17 @@ class CompetitionParser {
             val document = Jsoup.parse(html)
             val links = document.select("a")
 
+            var orderIndex = 0
+
             for (link in links) {
                 val title = link.text().trim()
                 val href = link.attr("href")
 
                 if (title.isBlank() || href.isBlank()) continue
                 if (!creativeKeywords.any { title.lowercase().contains(it) }) continue
+
+                val contextText = link.parent()?.text().orEmpty()
+                val publishedAt = parseDate(contextText)
 
                 val fullUrl = if (href.startsWith("http")) href
                     else "https://roskonkurs.com$href"
@@ -107,7 +119,9 @@ class CompetitionParser {
                         title = title,
                         location = "Всероссийский",
                         organizer = "РОСконкурс",
-                        sourceUrl = fullUrl
+                        sourceUrl = fullUrl,
+                        publishedAt = publishedAt,
+                        siteOrder = orderIndex
                     )
                 )
             }
@@ -141,6 +155,61 @@ class CompetitionParser {
         }
 
         return "Организатор не указан"
+    }
+
+    private fun parseDate(text: String): Long {
+        val monthNames = mapOf(
+            "январ" to 0, "феврал" to 1, "март" to 2, "апрел" to 3,
+            "ма" to 4, "июн" to 5, "июл" to 6, "август" to 7,
+            "сентябр" to 8, "октябр" to 9, "ноябр" to 10, "декабр" to 11
+        )
+
+        val ruPattern = Regex("""(\d{1,2})\s+([а-яё]+)\s+(\d{4})""", RegexOption.IGNORE_CASE)
+        ruPattern.find(text)?.let { match ->
+            val day = match.groupValues[1].toIntOrNull() ?: return@let
+            val monthWord = match.groupValues[2].lowercase()
+            val year = match.groupValues[3].toIntOrNull() ?: return@let
+            val month = monthNames.entries.firstOrNull { monthWord.startsWith(it.key) }?.value
+                ?: return@let
+            return try {
+                val cal = java.util.Calendar.getInstance()
+                cal.set(year, month, day, 0, 0, 0)
+                cal.timeInMillis
+            } catch (e: Exception) {
+                0L
+            }
+        }
+
+        val numericPattern = Regex("""(\d{1,2})[./](\d{1,2})[./](\d{4})""")
+        numericPattern.find(text)?.let { match ->
+            val day = match.groupValues[1].toIntOrNull() ?: return@let
+            val month = (match.groupValues[2].toIntOrNull() ?: return@let) - 1
+            val year = match.groupValues[3].toIntOrNull() ?: return@let
+            return try {
+                val cal = java.util.Calendar.getInstance()
+                cal.set(year, month, day, 0, 0, 0)
+                cal.timeInMillis
+            } catch (e: Exception) {
+                0L
+            }
+        }
+
+        val isoPattern = Regex("""(\d{4})-(\d{2})-(\d{2})""")
+        isoPattern.find(text)?.let { match ->
+            val year = match.groupValues[1].toIntOrNull() ?: return@let
+            val month = (match.groupValues[2].toIntOrNull() ?: return@let) - 1
+            val day = match.groupValues[3].toIntOrNull() ?: return@let
+            return try {
+                val cal = java.util.Calendar.getInstance()
+                cal.set(year, month, day, 0, 0, 0)
+                cal.timeInMillis
+            } catch (e: Exception)
+            {
+                0L
+            }
+        }
+
+        return 0L
     }
 }
 

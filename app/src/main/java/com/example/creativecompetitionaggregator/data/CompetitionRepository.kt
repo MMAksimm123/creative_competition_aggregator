@@ -28,11 +28,13 @@ class CompetitionRepository(private val context: Context) {
 
         val unique = allCompetitions.distinctBy { it.sourceUrl }
 
+        val sorted = sortByNewest(unique)
+
         if (unique.isNotEmpty()) {
-            saveToCache(unique)
+            saveToCache(sorted)
         }
 
-        unique
+        sorted
     }
 
     private fun readFromCache(): List<CompetitionSummary> {
@@ -40,7 +42,8 @@ class CompetitionRepository(private val context: Context) {
             if (!cacheFile.exists()) return emptyList()
             val content = cacheFile.readText()
             if (content.isBlank()) return emptyList()
-            json.decodeFromString<List<CompetitionSummary>>(content)
+            val parsed = json.decodeFromString<List<CompetitionSummary>>(content)
+            sortByNewest(parsed)
         } catch (e: Exception) {
             e.printStackTrace()
             emptyList()
@@ -54,6 +57,13 @@ class CompetitionRepository(private val context: Context) {
         } catch (e: Exception) {
             e.printStackTrace()
         }
+    }
+
+    private fun sortByNewest(list: List<CompetitionSummary>): List<CompetitionSummary> {
+        return list.sortedWith(
+            compareByDescending<CompetitionSummary> { it.publishedAt }
+                .thenBy { it.siteOrder }
+        )
     }
 
     fun clearCache() {

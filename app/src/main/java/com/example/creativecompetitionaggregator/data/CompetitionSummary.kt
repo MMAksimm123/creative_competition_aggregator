@@ -8,5 +8,7 @@ data class CompetitionSummary(
     val title: String,
     val location: String,
     val organizer: String,
-    val sourceUrl: String
+    val sourceUrl: String,
+    val publishedAt: Long = 0L,
+    val siteOrder: Int = 0
 )

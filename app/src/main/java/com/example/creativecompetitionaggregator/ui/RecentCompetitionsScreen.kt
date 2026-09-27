@@ -26,6 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -133,6 +134,22 @@ fun CompetitionCard(competition: CompetitionSummary) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
             )
+
+            if (competition.publishedAt > 0L) {
+                Spacer(modifier = Modifier.height(4.dp))
+                val formatted = remember(competition.publishedAt) {
+                    val sdf = java.text.SimpleDateFormat(
+                        "d MMMM yyyy",
+                        java.util.Locale("ru")
+                    )
+                    sdf.format(java.util.Date(competition.publishedAt))
+                }
+                Text(
+                    text = "\uD83D\uDCC5 $formatted",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                )
+            }
         }
     }
 }
