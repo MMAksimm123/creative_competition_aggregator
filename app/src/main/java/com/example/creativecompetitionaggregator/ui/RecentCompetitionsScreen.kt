@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,12 +24,14 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -44,6 +47,7 @@ fun RecentCompetitionsScreen(
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     Scaffold(
         topBar = {
@@ -57,7 +61,9 @@ fun RecentCompetitionsScreen(
             )
         }
     ) { padding ->
-        Box(modifier = modifier.fillMaxSize().padding(padding)) {
+        Box(modifier = modifier
+            .fillMaxSize()
+            .padding(padding)) {
             when {
                 uiState.isLoading -> {
                     CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
@@ -72,7 +78,6 @@ fun RecentCompetitionsScreen(
                             color = MaterialTheme.colorScheme.error
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-
                         Button(onClick = {viewModel.refresh()}) {
                             Text("Повторить")
                         }
@@ -91,7 +96,12 @@ fun RecentCompetitionsScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         items(uiState.competitions) { competition ->
-                            CompetitionCard(competition = competition)
+                            CompetitionCard(
+                                competition = competition,
+                                onOpenDetails = { url ->
+                                    openUrlInBrowser(context, url)
+                                }
+                            )
                         }
                     }
                 }
@@ -101,7 +111,9 @@ fun RecentCompetitionsScreen(
 }
 
 @Composable
-fun CompetitionCard(competition: CompetitionSummary) {
+fun CompetitionCard(
+    competition: CompetitionSummary,
+    onOpenDetails: (String) -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
@@ -109,7 +121,6 @@ fun CompetitionCard(competition: CompetitionSummary) {
             containerColor = MaterialTheme.colorScheme.surfaceVariant
         )
     ) {
-        // ДОБАВЛЕНО: Column, так как Card принимает только один дочерний элемент
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = competition.title,
@@ -150,13 +161,48 @@ fun CompetitionCard(competition: CompetitionSummary) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                 )
             }
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                TextButton(
+                    onClick = { onOpenDetails(competition.sourceUrl) }
+                ) {
+                    Text("Подробнее →")
+                }
+            }
+        }
+    }
+}
+
+private fun openUrlInBrowser(context: android.content.Context, url: String) {
+    try {
+        val customTabsIntent = androidx.browser.customtabs.CustomTabsIntent.Builder()
+            .setShowTitle(true)
+            .build()
+        customTabsIntent.launchUrl(context,android.net.Uri.parse(url))
+    } catch (e: Exception) {
+        try {
+            context.startActivity(
+                android.content.Intent(
+                    android.content.Intent.ACTION_VIEW,
+                    android.net.Uri.parse(url)
+                )
+            )
+        } catch (ex: android.content.ActivityNotFoundException) {
+            android.widget.Toast.makeText(
+                context,
+                "Не удалось открыть ссылку.",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
         }
     }
 }
 
 @Preview(showBackground = true)
 @Composable
-// ПЕРЕИМЕНОВАНО: чтобы не было конфликта имен с основным экраном
 fun RecentCompetitionsScreenPreview() {
     CreativeCompetitionAggregatorTheme {
         val fakeCompetition = CompetitionSummary(
@@ -166,6 +212,9 @@ fun RecentCompetitionsScreenPreview() {
             organizer = "Министерство просвещения РФ",
             sourceUrl = ""
         )
-        CompetitionCard(competition = fakeCompetition)
+        CompetitionCard(
+            competition = fakeCompetition,
+            onOpenDetails = {}
+        )
     }
 }

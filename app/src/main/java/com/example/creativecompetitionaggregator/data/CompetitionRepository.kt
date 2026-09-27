@@ -69,39 +69,4 @@ class CompetitionRepository(private val context: Context) {
     fun clearCache() {
         if (cacheFile.exists()) cacheFile.delete()
     }
-    /*private val mockJsonData = """
-         [
-          {
-            "id": "1",
-            "title": "Всероссийский конкурс детского рисунка \"Моя Россия\"",
-            "location": "Всероссийский",
-            "organizer": "Министерство просвещения РФ",
-            "sourceUrl": "https://example.com/1"
-          },
-          {
-            "id": "2",
-            "title": "Областной конкурс юных художников \"Уральская палитра\"",
-            "location": "Челябинская область",
-            "organizer": "Министерство образования Челябинской области",
-            "sourceUrl": "https://example.com/2"
-          },
-          {
-            "id": "3",
-            "title": "Международный конкурс дизайна \"Арт-Пространство\"",
-            "location": "Всероссийский",
-            "organizer": "Фонд поддержки искусств",
-            "sourceUrl": "https://example.com/3"
-          }
-        ]
-    """.trimIndent()*/
-
-//    suspend fun getRecentCompetitions(): List<CompetitionSummary> {
-//        delay(1000)
-//        return try {
-//            json.decodeFromString<List<CompetitionSummary>>(mockJsonData)
-//        } catch (e: Exception) {
-//            e.printStackTrace()
-//            emptyList()
-//        }
-//    }
 }
