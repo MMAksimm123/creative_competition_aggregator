@@ -1,5 +1,10 @@
 package com.example.creativecompetitionaggregator.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,14 +32,18 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.creativecompetitionaggregator.data.CompetitionSummary
@@ -47,23 +56,41 @@ fun RecentCompetitionsScreen(
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val reminders by viewModel.reminders.collectAsStateWithLifecycle()
     val context = LocalContext.current
+
+    // Состояние для открытия диалога
+    var reminderTarget by remember { mutableStateOf<CompetitionSummary?>(null) }
+
+    // Запрос разрешения на уведомления (Android 13+)
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* можно залогировать */ }
+
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val granted = ContextCompat.checkSelfPermission(
+                context, Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+            if (!granted) {
+                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {Text("Недавние конкурсы")},
+                title = { Text("Недавние конкурсы") },
                 actions = {
-                    IconButton(onClick = {viewModel.refresh()}) {
+                    IconButton(onClick = { viewModel.refresh() }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Обновить")
                     }
                 }
             )
         }
     ) { padding ->
-        Box(modifier = modifier
-            .fillMaxSize()
-            .padding(padding)) {
+        Box(modifier = modifier.fillMaxSize().padding(padding)) {
             when {
                 uiState.isLoading -> {
                     CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
@@ -78,16 +105,11 @@ fun RecentCompetitionsScreen(
                             color = MaterialTheme.colorScheme.error
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-                        Button(onClick = {viewModel.refresh()}) {
-                            Text("Повторить")
-                        }
+                        Button(onClick = { viewModel.refresh() }) { Text("Повторить") }
                     }
                 }
                 uiState.competitions.isEmpty() -> {
-                    Text(
-                        text = "Конкурсы не найдены",
-                        modifier = Modifier.align(Alignment.Center)
-                    )
+                    Text("Конкурсы не найдены", modifier = Modifier.align(Alignment.Center))
                 }
                 else -> {
                     LazyColumn(
@@ -95,12 +117,13 @@ fun RecentCompetitionsScreen(
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(uiState.competitions) { competition ->
+                        items(uiState.competitions, key = { it.id }) { competition ->
+                            val hasReminder = reminders.any { it.competitionId == competition.id }
                             CompetitionCard(
                                 competition = competition,
-                                onOpenDetails = { url ->
-                                    openUrlInBrowser(context, url)
-                                }
+                                hasReminder = hasReminder,
+                                onOpenDetails = { url -> openUrlInBrowser(context, url) },
+                                onAddReminder = { reminderTarget = competition }
                             )
                         }
                     }
@@ -108,12 +131,27 @@ fun RecentCompetitionsScreen(
             }
         }
     }
+
+    // Показываем диалог, если выбрана карточка
+    reminderTarget?.let { competition ->
+        AddReminderDialog(
+            competition = competition,
+            onDismiss = { reminderTarget = null },
+            onSave = { description, triggerAt ->
+                viewModel.addReminder(competition, description, triggerAt)
+                reminderTarget = null
+            }
+        )
+    }
 }
 
 @Composable
 fun CompetitionCard(
     competition: CompetitionSummary,
-    onOpenDetails: (String) -> Unit) {
+    hasReminder: Boolean,
+    onOpenDetails: (String) -> Unit,
+    onAddReminder: () -> Unit
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
@@ -132,7 +170,7 @@ fun CompetitionCard(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "\uD83D\uDCCD ${competition.location}",
+                text = "📍 ${competition.location}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Medium
@@ -141,7 +179,7 @@ fun CompetitionCard(
             Spacer(modifier = Modifier.height(4.dp))
 
             Text(
-                text = "\uD83C\uDFE2 ${competition.organizer}",
+                text = "🏢 ${competition.organizer}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
             )
@@ -149,27 +187,30 @@ fun CompetitionCard(
             if (competition.publishedAt > 0L) {
                 Spacer(modifier = Modifier.height(4.dp))
                 val formatted = remember(competition.publishedAt) {
-                    val sdf = java.text.SimpleDateFormat(
-                        "d MMMM yyyy",
-                        java.util.Locale("ru")
-                    )
+                    val sdf = java.text.SimpleDateFormat("d MMMM yyyy", java.util.Locale("ru"))
                     sdf.format(java.util.Date(competition.publishedAt))
                 }
                 Text(
-                    text = "\uD83D\uDCC5 $formatted",
+                    text = "📅 $formatted",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                 )
             }
+
             Spacer(modifier = Modifier.height(12.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                TextButton(
-                    onClick = { onOpenDetails(competition.sourceUrl) }
-                ) {
+                // Кнопка напоминания
+                TextButton(onClick = onAddReminder) {
+                    Text(if (hasReminder) "🔔 Напоминание есть" else "🔔 Напомнить")
+                }
+
+                // Кнопка «Подробнее»
+                TextButton(onClick = { onOpenDetails(competition.sourceUrl) }) {
                     Text("Подробнее →")
                 }
             }
@@ -212,9 +253,13 @@ fun RecentCompetitionsScreenPreview() {
             organizer = "Министерство просвещения РФ",
             sourceUrl = ""
         )
+        val reminders = false
+        val hasReminder = reminders
         CompetitionCard(
             competition = fakeCompetition,
-            onOpenDetails = {}
+            onOpenDetails = {},
+            onAddReminder = {},
+            hasReminder = hasReminder
         )
     }
 }
