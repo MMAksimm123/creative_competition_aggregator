@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -88,7 +89,8 @@ fun RecentCompetitionsScreen(
                     }
                 }
             )
-        }
+        },
+        contentWindowInsets = WindowInsets(0)
     ) { padding ->
         Box(modifier = modifier.fillMaxSize().padding(padding)) {
             when {
@@ -214,30 +216,6 @@ fun CompetitionCard(
                     Text("Подробнее →")
                 }
             }
-        }
-    }
-}
-
-private fun openUrlInBrowser(context: android.content.Context, url: String) {
-    try {
-        val customTabsIntent = androidx.browser.customtabs.CustomTabsIntent.Builder()
-            .setShowTitle(true)
-            .build()
-        customTabsIntent.launchUrl(context,android.net.Uri.parse(url))
-    } catch (e: Exception) {
-        try {
-            context.startActivity(
-                android.content.Intent(
-                    android.content.Intent.ACTION_VIEW,
-                    android.net.Uri.parse(url)
-                )
-            )
-        } catch (ex: android.content.ActivityNotFoundException) {
-            android.widget.Toast.makeText(
-                context,
-                "Не удалось открыть ссылку.",
-                android.widget.Toast.LENGTH_SHORT
-            ).show()
         }
     }
 }
